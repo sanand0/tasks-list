@@ -4,5 +4,10 @@ runtime:    python
 api_version:    1
 
 handlers:
+- url: /loading-small.gif
+  static_files: loading-small.gif
+  upload: loading-small.gif
+  expiration: "1000d"
+
 - url: /.*
   script: todo.py
