@@ -12,27 +12,30 @@ input.what  { width: 395px; }
 input.who   { width:  75px; }
 .b_when     { width: 120px; }
 input.when  { width: 115px; }
-thead { background-color: #333; color: white; text-align: left; }
-tbody .task { border-bottom: 1px solid #eee; }
-tbody .task td    { padding: 4px 0; }
-thead td { padding-bottom: 4px; }
+th { background-color: #333; color: white; text-align: left; }
+.task { border-bottom: 1px solid #eee; }
+.header { border-bottom: none; }
+.filter th { padding: 0 0 2px 0; }
+.task td { padding: 4px 0; }
+.add_task { margin-left: 2px; }
 </style>
 {% endif %}
 </head><body>
 <div class="container_12">
     <div class="grid_12">
         <h1>{{name}} tracker</h1>
-        <table><thead>
+        <table>
         {% if not mobile %}
         <tr class="task header"><th>&nbsp;</th><th>What</th><th>Who</th><th>When</th><th></th></tr>
-        <tr class="task filter"><td></td><td class="b_what"><input class="what"></td><td class="b_who"><input class="who"></td><td class="b_when"><input class="when"></td><td>Filter</td></tr>
+        <tr class="task filter"><th><input class="showdone" type="checkbox"></th><th class="b_what"><input class="what"></th><th class="b_who"><input class="who"></th><th class="b_when"><input class="when"></th><th>&nbsp;Filter</th></tr>
         {% endif %}
-        </thead><tbody>
         {% for task in tasks %}
+        {% if not mobile or not task.done %}
         <tr id="{{ task.key }}" class="task{% if task.done %} strikeout{% endif %}"><td><input class="done" type="checkbox" {% if task.done %}checked="1"{% endif %}></td><td class="b_what">{{ task.what }}</td><td class="b_who">{{ task.who }}</td><td class="b_when">{{ task.when }}</td><td><a href="#" class="edit">Edit</a> <a href="#" class="delete">Delete</a></td></tr>
+        {% endif %}
         {% endfor %}
         {% if not mobile %}<tr class="task addrow"><td></td><td class="b_what"><input class="what"></td><td class="b_who"><input class="who"></td><td class="b_when"><input class="when"></td><td><button class="add_task">Add</button></td></tr>{% endif %}
-        </tbody>
+        </table>
     </div>
 </div>
 {% if not mobile %}
@@ -47,12 +50,16 @@ function addTask(e) { e.preventDefault();
     if (!validate($row)) { return; }
     var what = $('.what', $row).val(),
         who  = $('.who', $row).val(),
-        when = $('.when', $row).val();
+        when = $('.when', $row).val(),
+        $add = $('<tr class="task"><td><input class="done" type="checkbox"></td><td class="b_what"><img src="/loading-small.gif"></td><td class="b_who"></td><td class="b_when"></td><td><a href="#" class="edit">Edit</a> <a href="#" class="delete">Delete</a></td></tr>').insertBefore($row);
     $.post('/{{name}}', { 'action': 'add_task', 'what': what, 'who': who, 'when': Date.parse(when).getTime() }, function(data) {
         var match;
         if (match = data.match(/^200 OK\s(\S+)/)) {
             $('input', $row).val('');
-            $row.before(['<tr id="', match[1], '" class="task"><td><input class="done" type="checkbox"></td><td class="b_what">', what, '</td><td class="b_who">', who, '</td><td>', when, '</td><td class="b_when"><a href="#" class="edit">Edit</a> <a href="#" class="delete">Delete</a></td></tr>'].join(''));
+            $add.attr('id', match[1]);
+            $('.b_what', $add).text(what);
+            $('.b_who' , $add).text(who);
+            $('.b_when', $add).text(when);
         }
         $('.what', $row).focus();
     });
@@ -60,7 +67,8 @@ function addTask(e) { e.preventDefault();
 
 function deleteTask(e) { e.preventDefault();
     var $row = $(this).parents('.task').eq(0);
-    $.post('/{{name}}', { 'action': 'del_task', 'key': $row.attr('id'), }, function(data) {
+    $('.delete', $row).replaceWith('<img src="/loading-small.gif">');
+    $.post('/{{name}}', { 'action': 'del_task', 'key': $row.attr('id') }, function(data) {
         if (data.match(/^200/)) { $row.remove(); }
     });
 }
@@ -71,7 +79,7 @@ function editTask(e) { e.preventDefault();
         what  = $('.b_what', $row).text(),
         who   = $('.b_who',  $row).text(),
         when  = $('.b_when', $row).text(),
-        $edit = $('.addrow').clone().attr('id', key),
+        $edit = $('.addrow').clone().attr('id', key).removeClass('addrow').addClass('editrow'),
         $what = $('.what', $edit).val(what),
         $who  = $('.who',  $edit).val(who),
         $when = $('.when', $edit).val(when).blur(validateDate);
@@ -83,6 +91,7 @@ function editTask(e) { e.preventDefault();
         var what = $what.val(),
             who  = $who.val(),
             when = $when.val();
+        $('.add_task', $edit).replaceWith('<img src="/loading-small.gif">');
         $.post('/{{name}}', { 'action': 'edit_task', 'key': key, 'what': what, 'who': who, 'when': Date.parse(when).getTime() }, function(data) {
             if (match = data.match(/^200 OK\s(\S+)/)) {
                 $('.b_what', $row).text(what);
@@ -119,17 +128,22 @@ function isValid(cell) {
 
 function validateDate(e) {
     var $row = $(this).parents('.task').eq(0),
-        $when = $('.when', $row);
-    $when.val(Date.parse($when.val()).toLocaleDateString());
+        $when = $('.when', $row),
+        d = Date.parse($when.val());
+    if (d) { $when.val(Date.parse($when.val()).toLocaleDateString()); }
 }
 
 $('.delete').live('click', deleteTask);
 $('.edit').live('click', editTask);
-$('input.done').live('change', doTask);
+$('input.done').live('click', doTask);
 
 $('.add_task').click(addTask);  // Don't make this live. Edit button clones the add_task button, and that must not do an addTask!
 $('.addrow input').keyup(function(e) { if (e.which == 13 && !$(e.target).is('button')) { validateDate.call(this, e); addTask.call(this, e); } });
 $('input.when').blur(validateDate);
+$('.showdone').click(function(e) {
+    if ($(this).attr('checked'))    { $('input.done:checked').parents('tr').show(); }
+    else                            { $('input.done:checked').parents('tr').hide(); }
+});
 
 $('.filter input').keyup(function(e) {
     var $this = $(this),
@@ -150,6 +164,7 @@ $('.b_when').each(function() {
     if (when) { $(this).text(date.toLocaleDateString()); }
 });
 
+$('input.done:checked').parents('tr').hide();
 </script>
 {% endif %}
 </body></html>

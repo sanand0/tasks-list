@@ -7,10 +7,10 @@ New line to add things at the end. Dates can be entered in GNU format. Who is an
 task.s-anand.net/payments
 
 TODO:
-# Show loading indicator
-# Let me enter items without having to wait for the previous one to finish
+# Multiple filters do not work now
+# done checkbox filter
+# Show loading indicator for done button
 # Fix the date format string
-
 '''
 
 import wsgiref.handlers, urllib, datetime
@@ -30,24 +30,24 @@ class Task(db.Model):
 
 class Access(db.Model):
     name = db.StringProperty    (required=True)                         # Name of the list
-    user = db.UserProperty      (required=True)                         # User who can access this list
+    user = db.StringProperty    (required=True)                         # e-mail IDs of user who can access this list
     time = db.DateTimeProperty  (required=True, auto_now_add=True)      # Last modified date
 
 user = users.get_current_user()
 
 class ListPage(webapp.RequestHandler):
     def get(self, name):
-        if not user:                                                                    # if user not logged in, send to login page
+        if not user:                                                                            # if user not logged in, send to login page
             self.redirect('/login/' + name)
-        elif Access.all().filter('name = ', name).filter('user = ', user).count() <= 0: # If no permission, say so
-            self.response.out.write('No access for you.')
+        elif Access.all().filter('name = ', name).filter('user = ', user.email()).count() <= 0: # If no permission, say so
+            self.response.out.write('No access for ' + user.email())
         else:
-            tasks = Task.all().filter('name = ', name)
-            mobile = self.request.headers['User-Agent'].find('BlackBerry') >= 0 and 0 or 1
+            tasks = Task.all().filter('name = ', name).order('when')
+            mobile = self.request.headers['User-Agent'].find('BlackBerry') >= 0 and 1 or 0
             self.response.out.write(template.render('index.html', dict(locals().items() + globals().items())))
 
     def post(self, name):
-        if user and Access.all().filter('name = ', name).filter('user = ', user).count() > 0:
+        if user and Access.all().filter('name = ', name).filter('user = ', user.email()).count() > 0:
             if self.request.get('action') == 'add_task':
                 what, who, when = (self.request.get(x) for x in ('what', 'who', 'when'))
                 when = date.fromtimestamp(float(when)/1000 + 43200.0)
@@ -92,9 +92,9 @@ class ListPage(webapp.RequestHandler):
 class AddUserPage(webapp.RequestHandler):
     def get(self, name, person):
         if users.is_current_user_admin():
-            person = users.User(urllib.unquote(person))
+            person = urllib.unquote(person)
             Access(name=name, user=person).put()
-            self.response.out.write('Added ' + person.nickname() + ' to list: ' + name)
+            self.response.out.write('Added ' + person + ' to list: ' + name)
 
 class LoginPage(webapp.RequestHandler):
     def get(self, name): self.redirect(users.create_login_url('/' + name))
