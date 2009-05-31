@@ -69,9 +69,7 @@ class ListPage(webapp.RequestHandler):
                 when = date.fromtimestamp(float(when)/1000 + 43200.0)
                 task = Task.get(key)
                 if task:
-                    task.what = what
-                    task.who  = who
-                    task.when = when
+                    task.what, task.who, task.when = what, who, when
                     task.put()
                     self.response.out.write('200 OK\t' + key)
                 else:
@@ -87,6 +85,17 @@ class ListPage(webapp.RequestHandler):
                     self.response.out.write('200 OK\t' + key)
                 else:
                     self.response.out.write('404 Key not found ' + key)
+
+            elif self.request.get('action') == 'mobile':
+                what, who, when = (self.request.get(x) for x in ('what', 'who', 'when'))
+                keys = [x for x in self.request.arguments() if x not in ('action', 'what', 'who', 'when')]
+                for key in keys:
+                    task = Task.get(key)
+                    task.done = True
+                    task.put()
+                if what:
+                    Task(name=name, what=what, who=who or user.nickname(), when=when or date.today()).put()
+                self.redirect('/' + name)
 
 # /_add/listname/email will add email to listname
 class AddUserPage(webapp.RequestHandler):
